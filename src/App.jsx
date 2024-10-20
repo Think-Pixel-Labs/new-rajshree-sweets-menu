@@ -14,7 +14,7 @@ function App() {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get('https://api.newrajshreesweets.com/common/products?status=ALL');
+      const response = await axios.get('https://api.newrajshreesweets.com/common/products?status=ALL&isMenuCall=true');
       const products = response.data.data;
 
       // Group products by category and sort products within each category
