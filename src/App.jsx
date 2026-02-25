@@ -61,13 +61,13 @@ function App() {
       <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <defs>
           <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#ffe4e6;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#fef3c7;stop-opacity:1" />
+            <stop offset="0%" style="stop-color:#fff8f0;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#fff1e0;stop-opacity:1" />
           </linearGradient>
         </defs>
         <rect width="200" height="200" fill="url(#grad)"/>
-        <text x="100" y="90" font-family="Arial, sans-serif" font-size="18" fill="#e11d48" text-anchor="middle" font-weight="bold">Image not found</text>
-        <text x="100" y="130" font-family="Arial, sans-serif" font-size="24" fill="#e11d48" text-anchor="middle">•︵•</text>
+        <text x="100" y="90" font-family="Lora, serif" font-size="16" fill="#8b1a2b" text-anchor="middle" font-weight="bold">Image not available</text>
+        <text x="100" y="130" font-family="Inter, sans-serif" font-size="24" fill="#8b1a2b" text-anchor="middle">•︵•</text>
       </svg>
     `;
     e.target.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgPlaceholder)}`;
