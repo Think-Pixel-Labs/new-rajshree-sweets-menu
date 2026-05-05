@@ -4,8 +4,8 @@ import {
   faAward,
   faCaretDown,
   faEnvelope,
+  faExternalLinkAlt,
   faGlobe,
-  faIndianRupeeSign,
   faLocationDot,
   faMagnifyingGlass,
   faPhone,
@@ -18,19 +18,58 @@ import localMenu from './data/menu.json';
 import logo from './assets/logo.png';
 
 const API_URL = 'https://api.newrajshreesweets.com/common/products?status=ALL&isMenuCall=true';
+const SHOP_URL = 'https://www.newrajshreesweets.com/shop';
+
+function formatPrice(value) {
+  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+}
+
+function getPriceLabel(price, priceRangeLabel) {
+  if (priceRangeLabel) return priceRangeLabel;
+  return formatPrice(price);
+}
+
+function getVariantPriceLabel(variants) {
+  const prices = variants.map((variant) => variant.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+
+  return min === max ? formatPrice(min) : `${formatPrice(min)} – ${formatPrice(max)}`;
+}
+
+function normalizeHamperVariants(variants = []) {
+  return variants
+    .map((variant) => ({
+      id: variant.id,
+      label: variant.label,
+      price: Number(variant.price || 0),
+      isDefault: Boolean(variant.isDefault),
+      sortOrder: Number(variant.sortOrder || 0)
+    }))
+    .filter((variant) => variant.label && variant.price > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
+}
 
 function normalizeApiProducts(products) {
   return products.reduce((acc, product) => {
     const categoryName = product.ProductCategory?.name || 'Signature Sweets';
     if (!acc[categoryName]) acc[categoryName] = [];
+    const hamperOptions = product.options?.hamper;
+    const variants = normalizeHamperVariants(hamperOptions?.variants);
+    const defaultVariant = variants.find((variant) => variant.isDefault) || variants[0];
+    const price = defaultVariant?.price || Number(product.price || 0);
 
     acc[categoryName].push({
       id: product.id || `${categoryName}-${product.name}`,
       name: product.name,
-      price: Number(product.price || 0),
+      price,
+      priceLabel: variants.length > 0 ? getVariantPriceLabel(variants) : getPriceLabel(price, hamperOptions?.priceRangeLabel),
       quantityType: product.quantityType || 'unit',
       shelfLife: product.shelfLife,
-      imageName: product.name
+      imageName: product.name,
+      description: product.description,
+      ingredients: hamperOptions?.ingredients || [],
+      variants
     });
 
     return acc;
@@ -43,9 +82,13 @@ function normalizeLocalMenu(menu) {
       id: `${categoryName}-${item.name}-${index}`,
       name: item.name,
       price: Number(item.rate || 0),
+      priceLabel: formatPrice(item.rate),
       quantityType: categoryName.toLowerCase().includes('piece') ? 'piece' : 'kg',
       shelfLife: null,
-      imageName: item.name
+      imageName: item.name,
+      description: '',
+      ingredients: [],
+      variants: []
     }));
 
     return acc;
@@ -102,7 +145,16 @@ function App() {
       const categoryMatches = category.toLowerCase().includes(search);
       const matchingItems = categoryMatches
         ? items
-        : items.filter((item) => item.name.toLowerCase().includes(search));
+        : items.filter((item) => {
+            const variantMatches = item.variants.some((variant) => variant.label.toLowerCase().includes(search));
+            const ingredientMatches = item.ingredients.some((ingredient) => ingredient.toLowerCase().includes(search));
+            return (
+              item.name.toLowerCase().includes(search) ||
+              item.description?.toLowerCase().includes(search) ||
+              variantMatches ||
+              ingredientMatches
+            );
+          });
 
       if (matchingItems.length) acc[category] = matchingItems;
       return acc;
@@ -164,6 +216,10 @@ function App() {
             <p className="hero-description">
               A curated menu of traditional sweets, namkeen and festive favourites, presented with the warmth of the Rajshree identity.
             </p>
+            <a className="shop-now-link" href={SHOP_URL} target="_blank" rel="noopener noreferrer">
+              Shop now
+              <FontAwesomeIcon icon={faExternalLinkAlt} />
+            </a>
           </div>
 
           <div className="hero-badges" aria-label="Business highlights">
@@ -262,16 +318,30 @@ function App() {
                             loading="lazy"
                           />
                         </div>
-                        <div className="item-details">
-                          <h3>{item.name}</h3>
+                          <div className="item-details">
+                            <h3>{item.name}</h3>
+                          {item.description && <p className="item-description">{item.description}</p>}
                           <div className="item-meta">
                             {item.shelfLife ? <span>Shelf life: {item.shelfLife} days</span> : <span>Freshly prepared</span>}
                             <span>{item.quantityType}</span>
                           </div>
+                          {item.variants.length > 0 && (
+                            <div className="variant-list" aria-label={`${item.name} variants`}>
+                              {item.variants.map((variant) => (
+                                <span key={variant.id || variant.label} className={variant.isDefault ? 'default-variant' : ''}>
+                                  <strong>{variant.label}</strong>
+                                  <small>{formatPrice(variant.price)}</small>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <p className="item-rate">
-                            <FontAwesomeIcon icon={faIndianRupeeSign} />
-                            {item.price.toLocaleString('en-IN')}
+                            {item.priceLabel}
                           </p>
+                          <a className="item-shop-link" href={SHOP_URL} target="_blank" rel="noopener noreferrer">
+                            Shop now
+                            <FontAwesomeIcon icon={faExternalLinkAlt} />
+                          </a>
                         </div>
                       </div>
                     ))}
