@@ -615,12 +615,27 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .hero-content {
+    justify-items: center;
+  }
+
   .brand-mark-wrap {
     width: 128px;
+    justify-self: center;
   }
 
   .hero-copy {
-    text-align: left;
+    text-align: center;
+  }
+
+  .hero-description {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-badges {
+    justify-content: center;
+    width: 100%;
   }
 
   .hero-badges span {
@@ -658,7 +673,7 @@ a {
   }
 
   .hero-content {
-    justify-items: start;
+    justify-items: center;
     gap: 15px;
   }
 
