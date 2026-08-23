@@ -13,95 +13,66 @@ import {
   faStar,
   faXmark
 } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
-import localMenu from './data/menu.json';
 import logo from './assets/logo.png';
+import {
+  SHOP_URL,
+  buildMenuImageCandidates,
+  fetchAllMenuProducts,
+  getFallbackMenu,
+  normalizeApiProducts,
+  sortCategories
+} from './utils/menuCatalog';
 
-const API_URL = 'https://api.newrajshreesweets.com/common/products?status=ALL&isMenuCall=true';
-const SHOP_URL = 'https://www.newrajshreesweets.com/shop';
+const IMAGE_PLACEHOLDER = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
+    <defs>
+      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#fff7ed" />
+        <stop offset="52%" stop-color="#ffe8c7" />
+        <stop offset="100%" stop-color="#f9d38d" />
+      </linearGradient>
+      <pattern id="motif" width="48" height="48" patternUnits="userSpaceOnUse">
+        <circle cx="24" cy="24" r="2.5" fill="#b91c1c" opacity="0.16" />
+      </pattern>
+    </defs>
+    <rect width="480" height="360" fill="url(#bg)" />
+    <rect width="480" height="360" fill="url(#motif)" />
+    <circle cx="240" cy="150" r="62" fill="#fffaf0" opacity="0.84" />
+    <path d="M190 193c32-34 68-34 100 0" fill="none" stroke="#b91c1c" stroke-width="10" stroke-linecap="round" />
+    <text x="240" y="258" font-family="Georgia, serif" font-size="24" fill="#7f1d1d" text-anchor="middle" font-weight="700">New Rajshree Sweets</text>
+  </svg>
+`)}`;
 
-function formatPrice(value) {
-  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
-}
+function MenuItemImage({ productName, variantId, alt }) {
+  const candidates = useMemo(
+    () => buildMenuImageCandidates(productName, variantId),
+    [productName, variantId]
+  );
+  const [candidateIndex, setCandidateIndex] = useState(0);
 
-function getPriceLabel(price, priceRangeLabel) {
-  if (priceRangeLabel) return priceRangeLabel;
-  return formatPrice(price);
-}
+  useEffect(() => {
+    setCandidateIndex(0);
+  }, [productName, variantId]);
 
-function getVariantPriceLabel(variants) {
-  const prices = variants.map((variant) => variant.price);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
+  const handleImageError = (event) => {
+    if (candidateIndex + 1 < candidates.length) {
+      setCandidateIndex((current) => current + 1);
+      return;
+    }
 
-  return min === max ? formatPrice(min) : `${formatPrice(min)} – ${formatPrice(max)}`;
-}
+    event.currentTarget.onerror = null;
+    event.currentTarget.src = IMAGE_PLACEHOLDER;
+  };
 
-function normalizeHamperVariants(variants = []) {
-  return variants
-    .map((variant) => ({
-      id: variant.id,
-      label: variant.label,
-      price: Number(variant.price || 0),
-      isDefault: Boolean(variant.isDefault),
-      sortOrder: Number(variant.sortOrder || 0)
-    }))
-    .filter((variant) => variant.label && variant.price > 0)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
-}
-
-function normalizeApiProducts(products) {
-  return products.reduce((acc, product) => {
-    const categoryName = product.ProductCategory?.name || 'Signature Sweets';
-    if (!acc[categoryName]) acc[categoryName] = [];
-    const hamperOptions = product.options?.hamper;
-    const variants = normalizeHamperVariants(hamperOptions?.variants);
-    const defaultVariant = variants.find((variant) => variant.isDefault) || variants[0];
-    const price = defaultVariant?.price || Number(product.price || 0);
-
-    acc[categoryName].push({
-      id: product.id || `${categoryName}-${product.name}`,
-      name: product.name,
-      price,
-      priceLabel: variants.length > 0 ? getVariantPriceLabel(variants) : getPriceLabel(price, hamperOptions?.priceRangeLabel),
-      quantityType: product.quantityType || 'unit',
-      shelfLife: product.shelfLife,
-      imageName: product.name,
-      description: product.description,
-      ingredients: hamperOptions?.ingredients || [],
-      variants
-    });
-
-    return acc;
-  }, {});
-}
-
-function normalizeLocalMenu(menu) {
-  return Object.entries(menu).reduce((acc, [categoryName, items]) => {
-    acc[categoryName] = items.map((item, index) => ({
-      id: `${categoryName}-${item.name}-${index}`,
-      name: item.name,
-      price: Number(item.rate || 0),
-      priceLabel: formatPrice(item.rate),
-      quantityType: categoryName.toLowerCase().includes('piece') ? 'piece' : 'kg',
-      shelfLife: null,
-      imageName: item.name,
-      description: '',
-      ingredients: [],
-      variants: []
-    }));
-
-    return acc;
-  }, {});
-}
-
-function sortCategories(groupedProducts) {
-  return Object.keys(groupedProducts)
-    .sort((a, b) => a.localeCompare(b))
-    .reduce((acc, category) => {
-      acc[category] = [...groupedProducts[category]].sort((a, b) => a.name.localeCompare(b.name));
-      return acc;
-    }, {});
+  return (
+    <img
+      src={candidates[candidateIndex] || IMAGE_PLACEHOLDER}
+      alt={alt}
+      className="item-image"
+      onError={handleImageError}
+      loading="lazy"
+    />
+  );
 }
 
 function App() {
@@ -119,14 +90,14 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await axios.get(API_URL, { timeout: 6000 });
-      const sortedCategories = sortCategories(normalizeApiProducts(response.data.data || []));
+      const products = await fetchAllMenuProducts();
+      const sortedCategories = sortCategories(normalizeApiProducts(products));
 
       setCategories(sortedCategories);
       setActiveCategory(Object.keys(sortedCategories)[0] || '');
       setSourceLabel('Live menu');
     } catch (error) {
-      const fallbackCategories = sortCategories(normalizeLocalMenu(localMenu));
+      const fallbackCategories = getFallbackMenu();
 
       setCategories(fallbackCategories);
       setActiveCategory(Object.keys(fallbackCategories)[0] || '');
@@ -145,16 +116,11 @@ function App() {
       const categoryMatches = category.toLowerCase().includes(search);
       const matchingItems = categoryMatches
         ? items
-        : items.filter((item) => {
-            const variantMatches = item.variants.some((variant) => variant.label.toLowerCase().includes(search));
-            const ingredientMatches = item.ingredients.some((ingredient) => ingredient.toLowerCase().includes(search));
-            return (
-              item.name.toLowerCase().includes(search) ||
-              item.description?.toLowerCase().includes(search) ||
-              variantMatches ||
-              ingredientMatches
-            );
-          });
+        : items.filter((item) => (
+          item.name.toLowerCase().includes(search) ||
+          item.description?.toLowerCase().includes(search) ||
+          item.ingredients.some((ingredient) => ingredient.toLowerCase().includes(search))
+        ));
 
       if (matchingItems.length) acc[category] = matchingItems;
       return acc;
@@ -167,30 +133,6 @@ function App() {
 
   const toggleCategory = (category) => {
     setActiveCategory((current) => (current === category ? '' : category));
-  };
-
-  const handleImageError = (event) => {
-    event.currentTarget.onerror = null;
-    const svgPlaceholder = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
-        <defs>
-          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#fff7ed" />
-            <stop offset="52%" stop-color="#ffe8c7" />
-            <stop offset="100%" stop-color="#f9d38d" />
-          </linearGradient>
-          <pattern id="motif" width="48" height="48" patternUnits="userSpaceOnUse">
-            <circle cx="24" cy="24" r="2.5" fill="#b91c1c" opacity="0.16" />
-          </pattern>
-        </defs>
-        <rect width="480" height="360" fill="url(#bg)" />
-        <rect width="480" height="360" fill="url(#motif)" />
-        <circle cx="240" cy="150" r="62" fill="#fffaf0" opacity="0.84" />
-        <path d="M190 193c32-34 68-34 100 0" fill="none" stroke="#b91c1c" stroke-width="10" stroke-linecap="round" />
-        <text x="240" y="258" font-family="Georgia, serif" font-size="24" fill="#7f1d1d" text-anchor="middle" font-weight="700">New Rajshree Sweets</text>
-      </svg>
-    `;
-    event.currentTarget.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgPlaceholder)}`;
   };
 
   if (loading) {
@@ -310,12 +252,10 @@ function App() {
                     {filteredCategories[category].map((item) => (
                       <div key={item.id} className="item-wrapper">
                         <div className="item-image-wrap">
-                          <img
-                            src={`https://assets.newrajshreesweets.com/product-images/${encodeURIComponent(item.imageName)}/1.webp`}
+                          <MenuItemImage
+                            productName={item.imageName}
+                            variantId={item.variantId}
                             alt={item.name}
-                            className="item-image"
-                            onError={handleImageError}
-                            loading="lazy"
                           />
                         </div>
                           <div className="item-details">
@@ -325,20 +265,10 @@ function App() {
                             {item.shelfLife ? <span>Shelf life: {item.shelfLife} days</span> : <span>Freshly prepared</span>}
                             <span>{item.quantityType}</span>
                           </div>
-                          {item.variants.length > 0 && (
-                            <div className="variant-list" aria-label={`${item.name} variants`}>
-                              {item.variants.map((variant) => (
-                                <span key={variant.id || variant.label} className={variant.isDefault ? 'default-variant' : ''}>
-                                  <strong>{variant.label}</strong>
-                                  <small>{formatPrice(variant.price)}</small>
-                                </span>
-                              ))}
-                            </div>
-                          )}
                           <p className="item-rate">
                             {item.priceLabel}
                           </p>
-                          <a className="item-shop-link" href={SHOP_URL} target="_blank" rel="noopener noreferrer">
+                          <a className="item-shop-link" href={item.shopHref || SHOP_URL} target="_blank" rel="noopener noreferrer">
                             Shop now
                             <FontAwesomeIcon icon={faExternalLinkAlt} />
                           </a>
