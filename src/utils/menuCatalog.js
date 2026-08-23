@@ -7,6 +7,16 @@ export const SHOP_URL = 'https://www.newrajshreesweets.com/shop';
 export const HAMPERS_URL = 'https://www.newrajshreesweets.com/hampers';
 
 const PAGE_SIZE = 100;
+const MENU_VISIBLE_STATUSES = new Set(['IN_STOCK', 'OUT_OF_STOCK']);
+
+function isVisibleMenuProduct(product) {
+  return MENU_VISIBLE_STATUSES.has(String(product?.status || '').toUpperCase());
+}
+
+function isVisibleMenuVariant(variant) {
+  const status = String(variant?.status || '').toUpperCase();
+  return status !== 'DISABLED';
+}
 
 export function compareNames(a, b) {
   return String(a || '').localeCompare(String(b || ''), 'en', {
@@ -80,11 +90,13 @@ function toMenuItem(product, { variant = null, price, priceLabel, categoryName }
 
 export function normalizeApiProducts(products = []) {
   return products.reduce((acc, product) => {
+    if (!isVisibleMenuProduct(product)) return acc;
+
     const categoryName = product.ProductCategory?.name || 'Signature Sweets';
     if (!acc[categoryName]) acc[categoryName] = [];
 
     const hamperOptions = product.options?.hamper;
-    const variants = getProductVariants(product);
+    const variants = getProductVariants(product).filter(isVisibleMenuVariant);
 
     if (variants.length > 0) {
       variants.forEach((variant, index) => {
@@ -187,7 +199,7 @@ export async function fetchAllMenuProducts() {
     if (offset > 5000) break;
   }
 
-  return all;
+  return all.filter(isVisibleMenuProduct);
 }
 
 export function getFallbackMenu() {
