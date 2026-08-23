@@ -1,7 +1,11 @@
 import axios from 'axios';
 import localMenu from '../data/menu.json';
 
-export const API_BASE_URL = 'https://api.newrajshreesweets.com/common/products';
+export const API_HOSTS = [
+  'https://api2.newrajshreesweets.com',
+  'https://api3.newrajshreesweets.com',
+  'https://api.newrajshreesweets.com'
+];
 export const ASSETS_URL = 'https://assets.newrajshreesweets.com';
 export const SHOP_URL = 'https://www.newrajshreesweets.com/shop';
 export const HAMPERS_URL = 'https://www.newrajshreesweets.com/hampers';
@@ -92,7 +96,9 @@ export function normalizeApiProducts(products = []) {
   return products.reduce((acc, product) => {
     if (!isVisibleMenuProduct(product)) return acc;
 
-    const categoryName = product.ProductCategory?.name || 'Signature Sweets';
+    const categoryName = product.isHamper
+      ? 'Hampers'
+      : product.ProductCategory?.name || 'Signature Sweets';
     if (!acc[categoryName]) acc[categoryName] = [];
 
     const hamperOptions = product.options?.hamper;
@@ -155,29 +161,40 @@ export function sortCategories(groupedProducts) {
     }, {});
 }
 
-async function fetchProductPage(offset) {
-  const response = await axios.get(API_BASE_URL, {
-    params: {
-      status: 'ALL',
-      isMenuCall: true,
-      limit: PAGE_SIZE,
-      offset
-    },
-    timeout: 8000
-  });
-
-  return Array.isArray(response.data?.data) ? response.data.data : [];
+function productsPath(host) {
+  return `${host}/common/products`;
 }
 
-export async function fetchAllMenuProducts() {
+async function fetchJson(url, params) {
+  const response = await axios.get(url, {
+    params,
+    timeout: 12000
+  });
+  return response.data;
+}
+
+async function fetchProductPage(host, offset, extraParams = {}) {
+  const payload = await fetchJson(productsPath(host), {
+    status: 'ALL',
+    isMenuCall: true,
+    limit: PAGE_SIZE,
+    offset,
+    ...extraParams
+  });
+
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+async function fetchPagedProducts(host, extraParams = {}) {
   let expected = null;
 
   try {
-    const countResponse = await axios.get(`${API_BASE_URL}/count`, {
-      params: { status: 'ALL', isMenuCall: true },
-      timeout: 6000
+    const countResponse = await fetchJson(`${productsPath(host)}/count`, {
+      status: 'ALL',
+      isMenuCall: true,
+      ...extraParams
     });
-    const parsed = Number(countResponse.data?.data);
+    const parsed = Number(countResponse?.data);
     if (Number.isFinite(parsed) && parsed >= 0) expected = parsed;
   } catch {
     expected = null;
@@ -187,7 +204,7 @@ export async function fetchAllMenuProducts() {
   let offset = 0;
 
   for (;;) {
-    const batch = await fetchProductPage(offset);
+    const batch = await fetchProductPage(host, offset, extraParams);
     all.push(...batch);
 
     if (batch.length === 0) break;
@@ -199,7 +216,37 @@ export async function fetchAllMenuProducts() {
     if (offset > 5000) break;
   }
 
-  return all.filter(isVisibleMenuProduct);
+  return all;
+}
+
+function mergeProductsById(productLists) {
+  const byId = new Map();
+
+  productLists.flat().forEach((product) => {
+    const key = product?.id ?? `name:${product?.name}`;
+    if (!byId.has(key)) byId.set(key, product);
+  });
+
+  return [...byId.values()];
+}
+
+export async function fetchAllMenuProducts() {
+  let lastError = null;
+
+  for (const host of API_HOSTS) {
+    try {
+      const [catalog, hampers] = await Promise.all([
+        fetchPagedProducts(host),
+        fetchPagedProducts(host, { isHamper: 1 })
+      ]);
+      const merged = mergeProductsById([catalog, hampers]);
+      if (merged.length) return merged.filter(isVisibleMenuProduct);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Unable to load the live menu');
 }
 
 export function getFallbackMenu() {
