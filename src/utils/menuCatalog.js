@@ -18,7 +18,7 @@ export const STORE_EMAIL = 'newrajshreesweetspvtltd@gmail.com';
 export const WEBSITE_URL = 'https://newrajshreesweets.com';
 
 const PAGE_SIZE = 100;
-const MENU_VISIBLE_STATUSES = new Set(['IN_STOCK', 'OUT_OF_STOCK']);
+const MENU_VISIBLE_STATUSES = new Set(['ENABLED', 'IN_STOCK', 'OUT_OF_STOCK']);
 
 function isVisibleMenuProduct(product) {
   return MENU_VISIBLE_STATUSES.has(String(product?.status || '').toUpperCase());
